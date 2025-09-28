@@ -15,7 +15,6 @@
     body { margin:0; padding:0; }
     #map { width: 100%; height: 100vh; }
 
-    /* Highlight clusters with reported issues */
     .marker-cluster.reported {
       background-color: rgba(255, 0, 0, 0.6);
       color: white;
@@ -35,18 +34,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tabletop.js/1.6.0/tabletop.min.js"></script>
 
 <script>
-  // Initialize map
   var map = L.map('map').setView([53.96, -1.08], 13);
 
-  // OpenStreetMap tiles
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Cluster group with custom icon function
+  // Cluster layer for all streetlights
   var markers = L.markerClusterGroup({
     iconCreateFunction: function(cluster) {
-      // Count how many markers in this cluster have reports
       var reportedCount = 0;
       cluster.getAllChildMarkers().forEach(marker => {
         if (marker.options.isReported) reportedCount++;
@@ -57,47 +53,62 @@
     }
   });
 
+  // Layer for reported flags (no clustering)
+  var reportedFlags = L.layerGroup();
+
   const SHEET_ID = '1Puy_K1qEi4DqX5mdWh4UbJPI-H-QbJbSuexkuobUT6c';
 
-  function addReports(geojsonLayer) {
+  // Refresh reported flags from Sheet
+  function refreshReports(geojsonLayer) {
+    reportedFlags.clearLayers();
+
     Tabletop.init({
       key: SHEET_ID,
       simpleSheet: true,
       callback: function(data, tabletop) {
-        const reports = {};
         data.forEach(row => {
           const id = row['LP_UNIQUE_REF'];
           const issue = row['Issue_Description'] || 'Reported issue';
-          if (id) {
-            if (!reports[id]) reports[id] = [];
-            reports[id].push(issue);
-          }
-        });
+          const severity = row['Severity'] || 'Low';
 
-        geojsonLayer.eachLayer(layer => {
-          const id = layer.feature.properties.LP_UNIQUE_REF || layer.feature.properties.IIT_NE_ID;
-          if (reports[id]) {
-            let popupContent = layer.getPopup().getContent();
-            popupContent += '<br><b>Reported Issues:</b><ul>';
-            reports[id].forEach(issue => {
-              popupContent += '<li>' + issue + '</li>';
-            });
-            popupContent += '</ul>';
-            layer.bindPopup(popupContent);
+          geojsonLayer.eachLayer(layer => {
+            const layerId = layer.feature.properties.LP_UNIQUE_REF || layer.feature.properties.IIT_NE_ID;
+            if (layerId === id) {
+              // Update popup for cluster layer
+              let popupContent = layer.getPopup().getContent();
+              popupContent += '<br><b>Reported Issue:</b> ' + issue + '<br><b>Severity:</b> ' + severity;
+              layer.bindPopup(popupContent);
 
-            // Red marker for reported issues
-            layer.setIcon(L.icon({
-              iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-red.png',
-              shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-              iconSize: [25, 41],
-              iconAnchor: [12, 41],
-              popupAnchor: [1, -34],
-              shadowSize: [41, 41]
-            }));
+              // Highlight cluster marker red
+              layer.setIcon(L.icon({
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-red.png',
+                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+              }));
+              layer.options.isReported = true;
 
-            // Flag marker as reported for cluster counting
-            layer.options.isReported = true;
-          }
+              // Add to reportedFlags layer
+              let color;
+              if (severity.toLowerCase() === 'low') color = 'green';
+              else if (severity.toLowerCase() === 'med' || severity.toLowerCase() === 'medium') color = 'orange';
+              else color = 'red';
+
+              var latlng = layer.getLatLng();
+              var reportedMarker = L.circleMarker(latlng, {
+                radius: 8,
+                fillColor: color,
+                color: '#000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+              }).bindPopup("<b>Streetlight Ref:</b> " + id + "<br><b>Issue:</b> " + issue + "<br><b>Severity:</b> " + severity);
+
+              reportedFlags.addLayer(reportedMarker);
+            }
+          });
         });
       }
     });
@@ -124,7 +135,6 @@
       markers.addLayer(geojsonLayer);
       map.addLayer(markers);
 
-      // Search control
       var searchControl = new L.Control.Search({
         layer: geojsonLayer,
         propertyName: 'LP_UNIQUE_REF',
@@ -134,8 +144,22 @@
       });
       map.addControl(searchControl);
 
-      // Fetch reported issues and update map
-      addReports(geojsonLayer);
+      // Initial load of reported flags
+      refreshReports(geojsonLayer);
+
+      // Auto-refresh every 60 seconds
+      setInterval(function() {
+        refreshReports(geojsonLayer);
+      }, 60000);
+
+      // Add layer control
+      var baseMaps = {
+        "Report a problem": markers
+      };
+      var overlayMaps = {
+        "Reported Flags": reportedFlags
+      };
+      L.control.layers(baseMaps, overlayMaps).addTo(map);
     });
 </script>
 </body>
