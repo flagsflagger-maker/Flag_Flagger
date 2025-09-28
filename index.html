@@ -54,10 +54,9 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Use published Google Sheet URL
-  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Puy_K1qEi4DqX5mdWh4UbJPI-H-QbJbSuexkuobUT6c/pubhtml';
+  // Use published Form Responses sheet
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pubhtml?gid=27103071&single=true';
 
-  // Cluster layer for all streetlights
   var markers = L.markerClusterGroup({
     iconCreateFunction: function(cluster) {
       var reportedCount = 0;
@@ -70,10 +69,9 @@
     }
   });
 
-  // Layer for reported flags (no clustering)
   var reportedFlags = L.layerGroup();
 
-  // Load GeoJSON streetlights
+  // Load GeoJSON
   fetch("Street_lighting.geojson")
     .then(res => res.json())
     .then(data => {
@@ -103,12 +101,12 @@
       });
       map.addControl(searchControl);
 
-      // Layer control
+      // Layer toggle
       var baseMaps = { "Report a problem": markers };
       var overlayMaps = { "Reported Flags": reportedFlags };
       L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-      // Refresh reported flags from Google Sheet
+      // Refresh reported flags from Sheet
       function refreshReports() {
         reportedFlags.clearLayers();
 
@@ -121,14 +119,15 @@
             data.forEach(row => {
               const id = row['LP_UNIQUE_REF'];
               const issue = row['Issue_Description'] || 'Reported issue';
-              const severity = row['Severity'] || 'Low';
+              const severity = issue || 'Low'; // Issue_Description contains severity text
 
               geojsonLayer.eachLayer(layer => {
                 const layerId = layer.feature.properties.LP_UNIQUE_REF || layer.feature.properties.IIT_NE_ID;
-                if (layerId === id) {
+                if (layerId == id) {
+                  // Update cluster popup
                   let popupContent = layer.getPopup().getContent();
                   if(!popupContent.includes(issue)) {
-                    popupContent += '<br><b>Reported Issue:</b> ' + issue + '<br><b>Severity:</b> ' + severity;
+                    popupContent += '<br><b>Reported Issue:</b> ' + issue;
                     layer.bindPopup(popupContent);
                   }
 
@@ -142,10 +141,10 @@
                   }));
                   layer.options.isReported = true;
 
-                  // Add colored marker for reported flags
+                  // Color by severity
                   let color;
-                  if (severity.toLowerCase() === 'low') color = 'green';
-                  else if (severity.toLowerCase() === 'med' || severity.toLowerCase() === 'medium') color = 'orange';
+                  if (severity.toLowerCase().includes('low')) color = 'green';
+                  else if (severity.toLowerCase().includes('med')) color = 'orange';
                   else color = 'red';
 
                   var latlng = layer.getLatLng();
@@ -156,7 +155,7 @@
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8
-                  }).bindPopup("<b>Streetlight Ref:</b> " + id + "<br><b>Issue:</b> " + issue + "<br><b>Severity:</b> " + severity);
+                  }).bindPopup("<b>Streetlight Ref:</b> " + id + "<br><b>Issue:</b> " + issue);
 
                   reportedFlags.addLayer(reportedMarker);
                 }
@@ -166,10 +165,7 @@
         });
       }
 
-      // Initial load
       refreshReports();
-
-      // Auto-refresh every 60 seconds
       setInterval(refreshReports, 60000);
     });
 </script>
