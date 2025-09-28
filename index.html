@@ -21,7 +21,6 @@
       border: 2px solid red;
     }
 
-    /* Counter box for reported flags */
     #reported-counter {
       position: absolute;
       top: 10px;
@@ -45,7 +44,7 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.js"></script>
 
-<!-- Tabletop.js for Google Sheet -->
+<!-- Tabletop.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tabletop.js/1.6.0/tabletop.min.js"></script>
 
 <script>
@@ -55,7 +54,8 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  const SHEET_ID = '1Puy_K1qEi4DqX5mdWh4UbJPI-H-QbJbSuexkuobUT6c';
+  // Use published Google Sheet URL
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1Puy_K1qEi4DqX5mdWh4UbJPI-H-QbJbSuexkuobUT6c/pubhtml';
 
   // Cluster layer for all streetlights
   var markers = L.markerClusterGroup({
@@ -73,7 +73,7 @@
   // Layer for reported flags (no clustering)
   var reportedFlags = L.layerGroup();
 
-  // Add GeoJSON streetlights
+  // Load GeoJSON streetlights
   fetch("Street_lighting.geojson")
     .then(res => res.json())
     .then(data => {
@@ -108,15 +108,14 @@
       var overlayMaps = { "Reported Flags": reportedFlags };
       L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-      // Initial load & periodic refresh of reported flags
+      // Refresh reported flags from Google Sheet
       function refreshReports() {
         reportedFlags.clearLayers();
 
         Tabletop.init({
-          key: SHEET_ID,
+          key: SHEET_URL,
           simpleSheet: true,
           callback: function(data) {
-            // Update counter
             document.getElementById('reported-counter').textContent = "Reported Flags: " + data.length;
 
             data.forEach(row => {
@@ -127,7 +126,6 @@
               geojsonLayer.eachLayer(layer => {
                 const layerId = layer.feature.properties.LP_UNIQUE_REF || layer.feature.properties.IIT_NE_ID;
                 if (layerId === id) {
-                  // Update cluster popup
                   let popupContent = layer.getPopup().getContent();
                   if(!popupContent.includes(issue)) {
                     popupContent += '<br><b>Reported Issue:</b> ' + issue + '<br><b>Severity:</b> ' + severity;
@@ -168,8 +166,11 @@
         });
       }
 
+      // Initial load
       refreshReports();
-      setInterval(refreshReports, 60000); // refresh every 60s
+
+      // Auto-refresh every 60 seconds
+      setInterval(refreshReports, 60000);
     });
 </script>
 </body>
