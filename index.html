@@ -55,7 +55,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:
 var reportLayer = L.markerClusterGroup();
 var reportedLayer = L.layerGroup();
 
-// URLs
 const GEOJSON_URL = "Street_lighting.geojson";
 const REPORTS_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
 const FLAGS_CSV   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTQ8KXvsECao-1KLnmp9SC9kO3mTjj0a9rBmNkqNHeFTNkXDW9FvrCSeML6gdnbRp2_PhqaFAim-so9/pub?gid=0&single=true&output=csv';
@@ -63,7 +62,7 @@ const APPSCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwik4Hxlp6Va_VZZD
 
 let geoLookup = {};
 
-// --- Load GeoJSON for coordinates & Report overlay ---
+// --- Load GeoJSON for Report overlay ---
 fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
   geojsonData.features.forEach(f=>{
     const id = f.properties.LP_UNIQUE_REF || f.properties.IIT_NE_ID;
@@ -74,30 +73,64 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
     const ward = f.properties.WARD || "";
     const loc = f.properties.LOCATION || "";
 
-    const marker = L.marker([f.geometry.coordinates[1], f.geometry.coordinates[0]]).bindPopup(
-      `<b>Streetlight Ref:</b> ${id}<br>
-       <b>Description:</b> ${desc}<br>
-       <b>Road:</b> ${road}<br>
-       <b>Ward:</b> ${ward}<br>
-       <button onclick="
-         fetch('${APPSCRIPT_URL}?LP_UNIQUE_REF=${encodeURIComponent(id)}&LOCATION=${encodeURIComponent(loc)}&ROAD_NAME=${encodeURIComponent(road)}&WARD=${encodeURIComponent(ward)}&Issue_Description=Reported', {method:'GET'})
-         .then(res=>alert('Report submitted!'))
-         .catch(err=>alert('Error submitting report'));
-       ">Report a problem</button>`
-    );
+    const marker = L.marker([f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+
+    marker.bindPopup(`
+      <b>Streetlight Ref:</b> ${id}<br>
+      <b>Description:</b> ${desc}<br>
+      <b>Road:</b> ${road}<br>
+      <b>Ward:</b> ${ward}<br>
+      <button class="report-btn" 
+              data-id="${id}" 
+              data-loc="${loc}" 
+              data-road="${road}" 
+              data-ward="${ward}">Report a problem</button>
+    `);
     reportLayer.addLayer(marker);
   });
 
   map.addLayer(reportLayer);
 });
 
-// --- Load Reported overlay (with flags filtering) ---
-function loadReportedLayer() {
+// --- Dynamic popup event for Report button ---
+map.on('popupopen', function(e){
+  const popupNode = e.popup.getElement();
+  const btn = popupNode.querySelector('.report-btn');
+  if(btn){
+    btn.addEventListener('click', function(){
+      const id = btn.dataset.id;
+      const loc = btn.dataset.loc;
+      const road = btn.dataset.road;
+      const ward = btn.dataset.ward;
+      const url = `${APPSCRIPT_URL}?LP_UNIQUE_REF=${encodeURIComponent(id)}&LOCATION=${encodeURIComponent(loc)}&ROAD_NAME=${encodeURIComponent(road)}&WARD=${encodeURIComponent(ward)}&Issue_Description=Reported`;
+
+      fetch(url,{method:'GET'})
+      .then(res=>{alert('Report submitted!'); map.closePopup();})
+      .catch(err=>alert('Error submitting report'));
+    });
+  }
+
+  const flagBtn = popupNode.querySelector('.flag-btn');
+  if(flagBtn){
+    flagBtn.addEventListener('click', function(){
+      const id = flagBtn.dataset.id;
+      fetch(`${APPSCRIPT_URL}?LP_UNIQUE_REF=${encodeURIComponent(id)}`,{method:'GET'})
+      .then(res=>{
+        alert('Flag submitted!');
+        e.popup._source.remove();
+      })
+      .catch(err=>alert('Error submitting flag'));
+    });
+  }
+});
+
+// --- Load Reported overlay ---
+function loadReportedLayer(){
   reportedLayer.clearLayers();
   Promise.all([
-    new Promise(resolve => Papa.parse(REPORTS_CSV, { download:true, header:true, skipEmptyLines:true, complete: r=>resolve(r.data) })),
-    new Promise(resolve => Papa.parse(FLAGS_CSV, { download:true, header:true, skipEmptyLines:true, complete: r=>resolve(r.data) }))
-  ]).then(([reports, flags])=>{
+    new Promise(resolve=>Papa.parse(REPORTS_CSV,{download:true,header:true,skipEmptyLines:true,complete:r=>resolve(r.data)})),
+    new Promise(resolve=>Papa.parse(FLAGS_CSV,{download:true,header:true,skipEmptyLines:true,complete:r=>resolve(r.data)}))
+  ]).then(([reports,flags])=>{
     const flaggedSet = new Set(flags.map(f=>f.LP_UNIQUE_REF));
     const filtered = reports.filter(r=>r.LP_UNIQUE_REF && !flaggedSet.has(r.LP_UNIQUE_REF));
     document.getElementById('reported-counter').textContent = "Reported Flags: "+filtered.length;
@@ -114,24 +147,19 @@ function loadReportedLayer() {
       else if(issue.toLowerCase().includes('high')) severity='High';
       let color = severity==='Low'?'green':severity==='Med'?'orange':'red';
 
-      const marker = L.circleMarker([coords[1], coords[0]], {
+      const marker = L.circleMarker([coords[1], coords[0]],{
         radius:8, fillColor:color, color:'#000', weight:1, opacity:1, fillOpacity:0.8
-      }).bindPopup(
-        `<b>Streetlight Ref:</b> ${id}<br>
-         <b>Issue:</b> ${issue}<br>
-         <b>Location:</b> ${r.LOCATION}<br>
-         <b>Road_Name:</b> ${r.ROAD_NAME}<br>
-         <b>Ward:</b> ${r.WARD}<br>
-         <b>Timestamp:</b> ${timestamp}<br>
-         <button onclick="
-           // Hide marker instantly
-           this.closest('.leaflet-popup')._source.remove();
-           // Submit flag
-           fetch('${APPSCRIPT_URL}?LP_UNIQUE_REF=${encodeURIComponent(id)}', {method:'GET'})
-           .then(res=>{alert('Flag submitted!'); })
-           .catch(err=>alert('Error submitting flag'));
-         ">Flag for Removal</button>`
-      );
+      });
+
+      marker.bindPopup(`
+        <b>Streetlight Ref:</b> ${id}<br>
+        <b>Issue:</b> ${issue}<br>
+        <b>Location:</b> ${r.LOCATION}<br>
+        <b>Road_Name:</b> ${r.ROAD_NAME}<br>
+        <b>Ward:</b> ${r.WARD}<br>
+        <b>Timestamp:</b> ${timestamp}<br>
+        <button class="flag-btn" data-id="${id}">Flag for Removal</button>
+      `);
 
       reportedLayer.addLayer(marker);
     });
@@ -141,12 +169,12 @@ function loadReportedLayer() {
 // Initial load
 loadReportedLayer();
 
-// Refresh every 60s only if reported overlay is visible
+// Refresh reported overlay every 60s if visible
 setInterval(()=>{
   if(document.getElementById('layer-toggle').value==='reported'){
     loadReportedLayer();
   }
-}, 60000);
+},60000);
 
 // --- Dropdown toggle ---
 document.getElementById('layer-toggle').addEventListener('change',function(){
