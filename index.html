@@ -2,10 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Reported Streetlights</title>
+  <title>Street Lighting Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.css" />
+
   <style>
     body { margin:0; padding:0; }
     #map { width:100%; height:100vh; }
@@ -28,6 +32,8 @@
 <div id="reported-counter">Reported Flags: 0</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
 <script>
@@ -37,17 +43,46 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-var reportedLayer = L.layerGroup().addTo(map);
+var reportLayer = L.markerClusterGroup();
+var reportedFlagsLayer = L.layerGroup();
 
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
+// URLs
 const GEOJSON_URL = "Street_lighting.geojson";
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
 
-// Load GeoJSON first to get coordinates
+// --- Load GeoJSON ---
 fetch(GEOJSON_URL)
   .then(res => res.json())
-  .then(geojsonData => {
+  .then(data => {
+    var geojsonReport = L.geoJson(data, {
+      onEachFeature: function(feature, layer) {
+        var id = feature.properties.LP_UNIQUE_REF || feature.properties.IIT_NE_ID || "Unknown";
+        var desc = feature.properties.DESCRIPTION || "";
+        var road = feature.properties.ROAD_NAME || "";
+        var formLink = "https://docs.google.com/forms/d/e/1FAIpQLSf5Q35Lody4pbcu9SKh3jxh3R5qqqLNajV6gzQgci6PZRB7Dg/viewform?usp=pp_url&entry.1636359810=" + encodeURIComponent(id);
+        var popupContent = "<b>Streetlight Ref:</b> " + id + "<br>" +
+                           "<b>Description:</b> " + desc + "<br>" +
+                           "<b>Road:</b> " + road + "<br>" +
+                           "<a href='" + formLink + "' target='_blank'>Report a problem</a>";
+        layer.bindPopup(popupContent);
+      }
+    });
+    reportLayer.addLayer(geojsonReport);
 
-    // Parse CSV
+    // Search control
+    var searchControl = new L.Control.Search({
+      layer: geojsonReport,
+      propertyName: 'LP_UNIQUE_REF',
+      initial: false,
+      zoom: 17,
+      marker: false
+    });
+    map.addControl(searchControl);
+
+    // Add only reportLayer by default
+    reportLayer.addTo(map);
+
+    // --- CSV for Reported Flags layer ---
     Papa.parse(CSV_URL, {
       download: true,
       header: true,
@@ -56,14 +91,13 @@ fetch(GEOJSON_URL)
         const reported = results.data.filter(r => r.LP_UNIQUE_REF);
         document.getElementById('reported-counter').textContent = "Reported Flags: " + reported.length;
 
-        // Build a lookup of coordinates from GeoJSON
+        // Build lookup of coordinates
         const geoLookup = {};
-        geojsonData.features.forEach(f => {
+        data.features.forEach(f => {
           const id = f.properties.LP_UNIQUE_REF || f.properties.IIT_NE_ID;
-          if(id) geoLookup[id] = f.geometry.coordinates; // [lng, lat]
+          if(id) geoLookup[id] = f.geometry.coordinates;
         });
 
-        // Add markers for reported issues
         reported.forEach(r => {
           const id = r.LP_UNIQUE_REF;
           const issue = r.Issue_Description || '';
@@ -85,13 +119,21 @@ fetch(GEOJSON_URL)
             fillOpacity: 0.8
           }).bindPopup("<b>Streetlight Ref:</b> " + id + "<br><b>Issue:</b> " + issue);
 
-          reportedLayer.addLayer(marker);
+          reportedFlagsLayer.addLayer(marker);
         });
 
+        // Layer toggle (as base layers so only one visible)
+        L.control.layers(
+          {
+            "Report a flag": reportLayer,
+            "Reported Flags": reportedFlagsLayer
+          },
+          {},
+          {collapsed:false}
+        ).addTo(map);
+
       },
-      error: function(err) {
-        console.error("CSV parse error:", err);
-      }
+      error: function(err){ console.error("CSV parse error:", err);}
     });
 
   });
