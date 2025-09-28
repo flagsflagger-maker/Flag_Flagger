@@ -46,6 +46,7 @@ var reportedFlagsLayer = L.layerGroup();
 const GEOJSON_URL = "Street_lighting.geojson";
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
 
+// --- Load GeoJSON ---
 fetch(GEOJSON_URL)
 .then(res => res.json())
 .then(data => {
@@ -74,9 +75,8 @@ fetch(GEOJSON_URL)
     skipEmptyLines: true,
     complete: function(results) {
       const reported = results.data.filter(r => r.LP_UNIQUE_REF);
-      document.getElementById('reported-counter').textContent = "Reported Flags: " + reported.length;
 
-      // GeoJSON lookup
+      // Build GeoJSON lookup
       const geoLookup = {};
       data.features.forEach(f => {
         const id = f.properties.LP_UNIQUE_REF || f.properties.IIT_NE_ID;
@@ -99,18 +99,35 @@ fetch(GEOJSON_URL)
         reportedFlagsLayer.addLayer(marker);
       });
 
-      // --- Layer toggle as base layers so only one visible ---
-      L.control.layers(
-        {
-          "Report a flag": reportLayer,
-          "Reported Flags": reportedFlagsLayer
-        },
-        {},
-        {collapsed:false}
-      ).addTo(map);
+      // --- Layer toggle using overlays ---
+      var overlays = {
+        "Report a flag": reportLayer,
+        "Reported Flags": reportedFlagsLayer
+      };
 
-      // Show default layer
+      var layerControl = L.control.layers({}, overlays, {collapsed:false}).addTo(map);
+
+      // Add only reportLayer by default
       reportLayer.addTo(map);
+      updateCounter(reportLayer);
+
+      // Listen for overlayadd/remove events to enforce one layer visible
+      map.on('overlayadd', function(e){
+        if(e.name==="Report a flag") { map.removeLayer(reportedFlagsLayer); updateCounter(reportLayer); }
+        if(e.name==="Reported Flags") { map.removeLayer(reportLayer); updateCounter(reportedFlagsLayer); }
+      });
+      map.on('overlayremove', function(e){
+        // Ensure at least one layer is visible
+        if(!map.hasLayer(reportLayer) && !map.hasLayer(reportedFlagsLayer)){
+          reportLayer.addTo(map);
+          updateCounter(reportLayer);
+        }
+      });
+
+      function updateCounter(layer){
+        if(layer===reportedFlagsLayer) document.getElementById('reported-counter').textContent = "Reported Flags: "+reported.length;
+        else document.getElementById('reported-counter').textContent = "Reported Flags: 0";
+      }
 
     },
     error: function(err){ console.error("CSV parse error:", err);}
