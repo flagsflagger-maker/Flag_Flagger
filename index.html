@@ -1,149 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Street Lighting Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.css" />
-
-  <style>
-    body { margin:0; padding:0; }
-    #map { width: 100%; height: 100vh; }
-
-    #reported-counter {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      background: white;
-      padding: 6px 12px;
-      border-radius: 4px;
-      font-family: sans-serif;
-      font-weight: bold;
-      box-shadow: 0 0 6px rgba(0,0,0,0.3);
-    }
-  </style>
+  <meta charset="utf-8">
+  <title>CSV Debug</title>
 </head>
 <body>
-<div id="map"></div>
-<div id="reported-counter">Reported Flags: 0</div>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.js"></script>
+<h2>CSV Debugging</h2>
+<div id="counter">Loading...</div>
+<ul id="list"></ul>
 
 <!-- PapaParse CSV parser -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
 <script>
-var map = L.map('map').setView([53.96, -1.08], 13);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-var markers = L.markerClusterGroup();
-var reportedFlags = L.layerGroup();
-
-// CSV link (tab-delimited)
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
 
-// Load GeoJSON
-fetch("Street_lighting.geojson")
-  .then(res => res.json())
-  .then(data => {
-    var geojsonLayer = L.geoJson(data, {
-      onEachFeature: function(feature, layer) {
-        var id = feature.properties.LP_UNIQUE_REF || feature.properties.IIT_NE_ID || "Unknown";
-        var desc = feature.properties.DESCRIPTION || "";
-        var road = feature.properties.ROAD_NAME || "";
-        var formLink = "https://docs.google.com/forms/d/e/1FAIpQLSf5Q35Lody4pbcu9SKh3jxh3R5qqqLNajV6gzQgci6PZRB7Dg/viewform?usp=pp_url&entry.1636359810=" + encodeURIComponent(id);
-        var popupContent = "<b>Streetlight Ref:</b> " + id + "<br>" +
-                           "<b>Description:</b> " + desc + "<br>" +
-                           "<b>Road:</b> " + road + "<br>" +
-                           "<a href='" + formLink + "' target='_blank'>Report a problem</a>";
-        layer.bindPopup(popupContent);
-      }
+// Parse CSV with tab delimiter
+Papa.parse(CSV_URL, {
+  download: true,
+  header: true,
+  delimiter: "\t",
+  complete: function(results) {
+    const data = results.data.filter(r => r.LP_UNIQUE_REF); // ignore empty rows
+    document.getElementById('counter').textContent = "Number of rows: " + data.length;
+
+    const listEl = document.getElementById('list');
+    data.forEach(row => {
+      const li = document.createElement('li');
+      li.textContent = row.LP_UNIQUE_REF;
+      listEl.appendChild(li);
     });
 
-    markers.addLayer(geojsonLayer);
-    map.addLayer(markers);
-
-    var searchControl = new L.Control.Search({
-      layer: geojsonLayer,
-      propertyName: 'LP_UNIQUE_REF',
-      initial: false,
-      zoom: 17,
-      marker: false
-    });
-    map.addControl(searchControl);
-
-    // Layer toggle
-    L.control.layers({"Report a problem": markers}, {"Reported Flags": reportedFlags}, {collapsed:false}).addTo(map);
-
-    // Fetch CSV via PapaParse (tab-delimited)
-    Papa.parse(CSV_URL, {
-      download: true,
-      header: true,
-      delimiter: "\t",
-      complete: function(results) {
-        const data = results.data.filter(r => r.LP_UNIQUE_REF);
-        document.getElementById('reported-counter').textContent = "Reported Flags: " + data.length;
-
-        data.forEach(row => {
-          const id = row.LP_UNIQUE_REF;
-          const issue = row.Issue_Description || '';
-          let severity = 'Low';
-          if(issue.toLowerCase().includes('med')) severity = 'Med';
-          else if(issue.toLowerCase().includes('high')) severity = 'High';
-
-          geojsonLayer.eachLayer(layer => {
-            const layerId = layer.feature.properties.LP_UNIQUE_REF || layer.feature.properties.IIT_NE_ID;
-            if(layerId == id) {
-              // Update popup
-              let popupContent = layer.getPopup().getContent();
-              if(!popupContent.includes(issue)){
-                popupContent += '<br><b>Reported Issue:</b> ' + issue;
-                layer.bindPopup(popupContent);
-              }
-
-              // Update cluster icon
-              layer.setIcon(L.icon({
-                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-red.png',
-                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-              }));
-              layer.options.isReported = true;
-
-              // Add colored circle marker
-              let color = severity === 'Low' ? 'green' : severity === 'Med' ? 'orange' : 'red';
-              var latlng = layer.getLatLng();
-              var reportedMarker = L.circleMarker(latlng, {
-                radius: 8,
-                fillColor: color,
-                color: '#000',
-                weight: 1,
-                opacity: 1,
-                fillOpacity: 0.8
-              }).bindPopup("<b>Streetlight Ref:</b> " + id + "<br><b>Issue:</b> " + issue);
-
-              reportedFlags.addLayer(reportedMarker);
-            }
-          });
-        });
-      }
-    });
-
-  });
+    console.log("Full data:", data);
+  },
+  error: function(err) {
+    document.getElementById('counter').textContent = "Error loading CSV: " + err;
+    console.error(err);
+  }
+});
 </script>
 </body>
 </html>
