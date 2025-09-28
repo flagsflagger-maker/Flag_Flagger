@@ -4,24 +4,37 @@
 <meta charset="utf-8">
 <title>Street Lighting Map</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-search@3.0.7/dist/leaflet-search.min.css" />
 
 <style>
-  body { margin:0; padding:0; }
-  #map { width:100%; height:100vh; }
-  .custom-control {
-    position:absolute;
-    top:10px;
-    left:10px;
-    z-index:1000;
-    background:white;
-    padding:5px 10px;
-    border-radius:4px;
-    font-family:sans-serif;
-  }
+body { margin:0; padding:0; }
+#map { width:100%; height:100vh; }
+.custom-control {
+  position:absolute;
+  top:10px;
+  left:10px;
+  z-index:1000;
+  background:white;
+  padding:5px 10px;
+  border-radius:4px;
+  font-family:sans-serif;
+}
+#reported-counter {
+  position:absolute;
+  top:10px;
+  right:10px;
+  z-index:1000;
+  background:white;
+  padding:6px 12px;
+  border-radius:4px;
+  font-weight:bold;
+  box-shadow:0 0 6px rgba(0,0,0,0.3);
+  font-family:sans-serif;
+}
 </style>
 </head>
 <body>
@@ -32,6 +45,7 @@
     <option value="reported">Reported</option>
   </select>
 </div>
+<div id="reported-counter">Reported Flags: 0</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -52,7 +66,7 @@ const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr
 fetch(GEOJSON_URL)
 .then(res => res.json())
 .then(data => {
-  // --- Report layer (clustered) ---
+  // --- Report layer ---
   var geojsonReport = L.geoJson(data, {
     onEachFeature: function(feature, layer) {
       var id = feature.properties.LP_UNIQUE_REF || feature.properties.IIT_NE_ID || "Unknown";
@@ -65,7 +79,7 @@ fetch(GEOJSON_URL)
   });
   reportLayer.addLayer(geojsonReport);
 
-  // Add search
+  // Add search to report layer
   var searchControl = new L.Control.Search({ layer: geojsonReport, propertyName: 'LP_UNIQUE_REF', initial:false, zoom:17, marker:false });
   map.addControl(searchControl);
 
@@ -74,12 +88,14 @@ fetch(GEOJSON_URL)
     download: true,
     header: true,
     skipEmptyLines: true,
-    complete: function(results){
+    complete: function(results) {
       const reported = results.data.filter(r => r.LP_UNIQUE_REF);
+      document.getElementById('reported-counter').textContent = "Reported Flags: " + reported.length;
+
       const geoLookup = {};
       data.features.forEach(f=>{
         const id = f.properties.LP_UNIQUE_REF || f.properties.IIT_NE_ID;
-        if(id) geoLookup[id] = f.geometry.coordinates;
+        if(id) geoLookup[id] = f.geometry.coordinates; // [lng, lat]
       });
 
       reported.forEach(r=>{
@@ -93,9 +109,8 @@ fetch(GEOJSON_URL)
         else if(issue.toLowerCase().includes('high')) severity = 'High';
         let color = severity==='Low'?'green':severity==='Med'?'orange':'red';
 
-        const marker = L.circleMarker([coords[1], coords[0]], {
-          radius:8, fillColor:color, color:'#000', weight:1, opacity:1, fillOpacity:0.8
-        }).bindPopup("<b>Streetlight Ref:</b>"+id+"<br><b>Issue:</b>"+issue);
+        const marker = L.circleMarker([coords[1], coords[0]], { radius:8, fillColor:color, color:'#000', weight:1, opacity:1, fillOpacity:0.8 })
+          .bindPopup("<b>Streetlight Ref:</b>"+id+"<br><b>Issue:</b>"+issue);
 
         reportedLayer.addLayer(marker);
       });
@@ -113,8 +128,9 @@ fetch(GEOJSON_URL)
         }
       });
 
-      // Add default layer
+      // Show default
       reportLayer.addTo(map);
+
     },
     error: function(err){ console.error("CSV parse error:", err);}
   });
