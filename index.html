@@ -12,8 +12,8 @@ body { margin:0; padding:0; }
 #map { width:100%; height:100vh; }
 .custom-control {
   position:absolute;
-  top:10px;
-  left:10px;
+  top:40px;
+  right:10px;
   z-index:1000;
   background:white;
   padding:5px 10px;
@@ -120,9 +120,9 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
             radius:8, fillColor:color, color:'#000', weight:1, opacity:1, fillOpacity:0.8
           }).bindPopup("<b>Streetlight Ref:</b>"+id+
                        "<br><b>Issue:</b>"+issue+
-                       "<br><b>Issue:</b>"+location+
-                       "<br><b>Issue:</b>"+Road_Name+
-                       "<br><b>Issue:</b>"+Ward+
+                       "<br><b>Location:</b>"+location+
+                       "<br><b>Road_Name:</b>"+Road_Name+
+                       "<br><b>Ward:</b>"+Ward+
                        "<br><b>Timestamp:</b>"+timestamp);
 
           reportedLayer.addLayer(marker);
