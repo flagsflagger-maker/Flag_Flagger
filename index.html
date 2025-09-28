@@ -69,13 +69,13 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
     const road = f.properties.ROAD_NAME || "";
     const ward = f.properties.WARD || "";
     const loc = f.properties.LOCATION || "";
-
+    //https://docs.google.com/forms/d/e/1FAIpQLSf5Q35Lody4pbcu9SKh3jxh3R5qqqLNajV6gzQgci6PZRB7Dg/viewform?usp=pp_url&entry.476717375=LOCATION&entry.704251959=ROAD_NAME&entry.561605536=WARD
     // Google Form prefill link
     const formLink = "https://docs.google.com/forms/d/e/1FAIpQLSf5Q35Lody4pbcu9SKh3jxh3R5qqqLNajV6gzQgci6PZRB7Dg/viewform?usp=pp_url" +
       "&entry.1636359810=" + encodeURIComponent(id) +
-      "&entry.1111111111=" + encodeURIComponent(loc) +
-      "&entry.2222222222=" + encodeURIComponent(road) +
-      "&entry.3333333333=" + encodeURIComponent(ward);
+      "&entry.476717375=" + encodeURIComponent(loc) +
+      "&entry.704251959=" + encodeURIComponent(road) +
+      "&entry.561605536=" + encodeURIComponent(ward);
 
     const popup = "<b>Streetlight Ref:</b> "+id+
                   "<br><b>Description:</b> "+desc+
