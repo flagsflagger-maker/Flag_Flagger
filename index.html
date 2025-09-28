@@ -106,6 +106,9 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
           const issue = r.Issue_Description || '';
           const timestamp = r.Timestamp || '';
           const coords = geoLookup[id];
+          const location = r.LOCATION || '';
+          const Road_Name = r.ROAD_NAME || '';
+          const Ward = r.WARD || '';
           if(!coords) return;
 
           let severity = 'Low';
@@ -117,6 +120,9 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
             radius:8, fillColor:color, color:'#000', weight:1, opacity:1, fillOpacity:0.8
           }).bindPopup("<b>Streetlight Ref:</b>"+id+
                        "<br><b>Issue:</b>"+issue+
+                       "<br><b>Issue:</b>"+location+
+                       "<br><b>Issue:</b>"+Road_Name+
+                       "<br><b>Issue:</b>"+Ward+
                        "<br><b>Timestamp:</b>"+timestamp);
 
           reportedLayer.addLayer(marker);
@@ -129,7 +135,7 @@ fetch(GEOJSON_URL).then(res=>res.json()).then(geojsonData=>{
   loadReportedLayer();
 
   // Refresh every 30 seconds
-  setInterval(loadReportedLayer, 30000);
+  setInterval(loadReportedLayer, 60000);
 
 });
 
