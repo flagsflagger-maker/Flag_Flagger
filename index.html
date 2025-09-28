@@ -2,61 +2,71 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Leaflet Overlay Toggle Debug</title>
+<title>Leaflet Drop-down Toggle Debug</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   body { margin:0; padding:0; }
   #map { width:100%; height:100vh; }
-  #top-right { position:absolute; top:10px; right:10px; z-index:1000; background:white; padding:6px 12px; border-radius:4px; font-weight:bold; }
+  .custom-control {
+    position:absolute;
+    top:10px;
+    left:10px;
+    z-index:1000;
+    background:white;
+    padding:5px 10px;
+    border-radius:4px;
+    font-family:sans-serif;
+  }
+  #center-label {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    z-index:1000;
+    font-size:32px;
+    font-weight:bold;
+    color:black;
+    background:rgba(255,255,255,0.7);
+    padding:10px 20px;
+    border-radius:6px;
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="top-right">Default</div>
+<div class="custom-control">
+  <select id="layer-toggle">
+    <option value="report">Report</option>
+    <option value="reported">Reported</option>
+  </select>
+</div>
+<div id="center-label">Report</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 var map = L.map('map').setView([53.96, -1.08], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-// Base tile layer
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-// Create two simple overlay layers
-var layer1 = L.layerGroup([L.marker([53.96, -1.08]).bindPopup('Layer 1 Marker')]);
-var layer2 = L.layerGroup([L.marker([53.97, -1.09]).bindPopup('Layer 2 Marker')]);
+// Two test layers
+var reportLayer = L.layerGroup([L.marker([53.96, -1.08]).bindPopup('Report Marker')]);
+var reportedLayer = L.layerGroup([L.marker([53.97, -1.09]).bindPopup('Reported Marker')]);
 
 // Add default layer
-layer1.addTo(map);
+reportLayer.addTo(map);
 
-// Overlays object for toggle
-var overlays = {
-  "Overlay 1": layer1,
-  "Overlay 2": layer2
-};
-
-// Layer control
-var lc = L.control.layers({}, overlays, {collapsed:false}).addTo(map);
-
-// Listen for overlayadd/overlayremove
-map.on('overlayadd', function(e){
-  if(e.name==="Overlay 1"){
-    map.removeLayer(layer2);
-    document.getElementById('top-right').textContent = "Default (1)";
+// Dropdown change handler
+document.getElementById('layer-toggle').addEventListener('change', function(){
+  var val = this.value;
+  if(val === "report"){
+    if(map.hasLayer(reportedLayer)) map.removeLayer(reportedLayer);
+    map.addLayer(reportLayer);
+    document.getElementById('center-label').textContent = "Report";
   }
-  if(e.name==="Overlay 2"){
-    map.removeLayer(layer1);
-    document.getElementById('top-right').textContent = "2";
-  }
-});
-
-map.on('overlayremove', function(e){
-  // Ensure at least one visible
-  if(!map.hasLayer(layer1) && !map.hasLayer(layer2)){
-    layer1.addTo(map);
-    document.getElementById('top-right').textContent = "Default (1)";
+  if(val === "reported"){
+    if(map.hasLayer(reportLayer)) map.removeLayer(reportLayer);
+    map.addLayer(reportedLayer);
+    document.getElementById('center-label').textContent = "Reported";
   }
 });
 </script>
