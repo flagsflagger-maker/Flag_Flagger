@@ -14,23 +14,23 @@
 <script>
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQH2VV-FfOWWKyr4XRaVAPxWL-8zn2dKmYB_2XxxKG_b9IfJVtgGU5xcFje_wh7WW_AyGpDABQpMlFo/pub?gid=27103071&single=true&output=csv';
 
-// Parse CSV with tab delimiter
+// Use PapaParse with auto delimiter detection
 Papa.parse(CSV_URL, {
   download: true,
   header: true,
-  delimiter: "\t",
+  skipEmptyLines: true,
   complete: function(results) {
-    const data = results.data.filter(r => r.LP_UNIQUE_REF); // ignore empty rows
+    const data = results.data.filter(r => r.LP_UNIQUE_REF);
     document.getElementById('counter').textContent = "Number of rows: " + data.length;
 
     const listEl = document.getElementById('list');
     data.forEach(row => {
       const li = document.createElement('li');
-      li.textContent = row.LP_UNIQUE_REF;
+      li.textContent = row.LP_UNIQUE_REF + " - " + row.Issue_Description;
       listEl.appendChild(li);
     });
 
-    console.log("Full data:", data);
+    console.log("Full parsed data:", data);
   },
   error: function(err) {
     document.getElementById('counter').textContent = "Error loading CSV: " + err;
